@@ -113,7 +113,7 @@ Wrapper script that generates a sample sheet from a flowcell directory and launc
 
 - `bash` 4.0+
 - `nextflow` available on `$PATH`
-- `generate_samplesheet_better_samplenames.sh` present at the path defined in the script constants
+- `generate_seqinspector_samplesheet.sh` present at the path defined in the script constants
 - A filled-in `seqinspector_FCQC.config` file (see Configuration)
 
 ---
@@ -176,7 +176,7 @@ FASTQ_SCREEN_REFERENCES="<path to FastQ Screen reference list CSV>"
 #NF_LAUNCHDIR="<directory from which nextflow run is executed>"
 ```
 
-A ready-to-use config file with site-specific values is provided as `seqinspector_FCQC.config`.
+A dummy config file is provided as `seqinspector_FCQC.config`.
 
 #### Config variable reference
 
