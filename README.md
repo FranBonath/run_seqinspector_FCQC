@@ -2,7 +2,108 @@
 
 This repository consists of bash scripts and dummy config files that can be used at NGI Stockholm to create a samplesheet for the nf-core/seqinspector pipeline based on a Illumina flowcell run directory.
 
-## 1. run_seqinspector_FCQC.sh
+## 1. generate_seqinspector_samplesheet.sh
+
+### Overview
+
+This script scans a sequencing output directory for paired-end FASTQ files and generates a CSV sample sheet. The script also includes the undetermined reads into the sample shee in that each lane of undetermined reads is added as a separate entry. Runs without undetermined files are taken into consideration. The output is printed to stdout and can be redirected to a file.
+
+---
+
+### Logic
+
+1. **Input validation** — Expects exactly one argument (the base directory). Exits with usage info if not provided.
+
+2. **FASTQ discovery** — Recursively searches `<base_directory>/Demultiplexing/` for all `*.fastq.gz` files (sorted).
+
+3. **Flowcell ID extraction** — The flowcell ID is derived from the base directory name, which is expected to follow the Illumina naming convention `<date>_<machineID>_<run_number>_<flowcell_ID>`. The script takes the last `_`-delimited field as the flowcell ID (e.g. `20240101_M12345_0042_ABCDEFGH` → `ABCDEFGH`).
+
+4. **Routing** — Each file is routed to one of two tracks:
+   - **Undetermined**: filenames matching `[Uu]ndetermined*_L<lane>_R[12]_<number>.fastq.gz` (located directly in `Demultiplexing/`) are stored in separate lane-keyed arrays.
+   - **Regular samples**: all other `*_R[12]_<number>.fastq.gz` files are stored by sample-name prefix.
+
+5. **Pairing** — Both regular and undetermined files are paired into R1/R2 pairs using associative arrays keyed by sample prefix or lane, respectively.
+
+6. **Sample sheet generation** — The script writes two groups of rows:
+
+   **Regular samples** — for each unique sample key:
+   - Extracts the **sample name** from the parent directory (stripping a leading `Sample_` prefix if present).
+   - Extracts the **lane number** from the sample key (e.g. `SampleName_S1_L001` → `lane1`).
+   - Composes the final sample name as `<sample_name>_<flowcell_ID>_lane<N>`.
+   - Extracts the **batch name** from the grandparent directory (one level above the sample directory).
+
+   **Undetermined reads** — for each lane that has undetermined files:
+   - Sets `sample` to `undetermined_<flowcell_ID>_laneX` (where X is the lane number).
+   - Sets `tags` to `undetermined`.
+
+   All rows share the same columns:
+
+   | Column    | Description                                                                        |
+   |-----------|------------------------------------------------------------------------------------|
+   | `sample`  | `<sample>_<flowcell_ID>_lane<N>`, or `undetermined_<flowcell_ID>_laneX`            |
+   | `fastq_1` | Full path to the R1 FASTQ file                                                     |
+   | `fastq_2` | Full path to the R2 FASTQ file                                                     |
+   | `rundir`  | `<base_directory>` (the run directory, without the `Demultiplexing` subdirectory)  |
+   | `tags`    | Batch name for regular samples; `undetermined` for undetermined reads              |
+
+---
+
+### Expected Directory Structure
+
+```
+<base_directory>/
+└── Demultiplexing/
+    ├── Undetermined_S0_L001_R1_001.fastq.gz   ← directly in Demultiplexing/
+    ├── Undetermined_S0_L001_R2_001.fastq.gz
+    ├── Undetermined_S0_L002_R1_001.fastq.gz   ← additional lanes (optional)
+    ├── Undetermined_S0_L002_R2_001.fastq.gz
+    └── <batch_name>/
+        └── Sample_<sample_name>/
+            ├── <sample_name>_R1_001.fastq.gz
+            └── <sample_name>_R2_001.fastq.gz
+```
+
+---
+
+### Usage
+
+```bash
+bash generate_samplesheet_with_undet.sh <base_directory>
+```
+
+#### Save to a file
+
+```bash
+bash generate_samplesheet_with_undet.sh /path/to/run > sample_sheet.csv
+```
+
+#### Example
+
+```bash
+bash generate_seqinspector_samplesheet.sh /path/to/outdir/seqinspector_outdir > sample_sheet.csv
+```
+
+This will produce a CSV like:
+
+```
+sample,fastq_1,fastq_2,rundir,tags
+MySample_ABCDEFGH_lane1,/path/to/Demultiplexing/BatchA/Sample_MySample/MySample_R1_001.fastq.gz,/path/to/Demultiplexing/BatchA/Sample_MySample/MySample_R2_001.fastq.gz,/path/to/run,BatchA
+undetermined_ABCDEFGH_lane1,/path/to/Demultiplexing/Undetermined_S0_L001_R1_001.fastq.gz,/path/to/Demultiplexing/Undetermined_S0_L001_R2_001.fastq.gz,/path/to/run,undetermined
+undetermined_ABCDEFGH_lane2,/path/to/Demultiplexing/Undetermined_S0_L002_R1_001.fastq.gz,/path/to/Demultiplexing/Undetermined_S0_L002_R2_001.fastq.gz,/path/to/run,undetermined
+```
+
+---
+
+### Notes
+
+- The script uses `set -euo pipefail` — it will exit immediately on any error, unset variable, or failed pipe.
+- If a sample is missing either R1 or R2, the corresponding field in the CSV will be empty (no error is raised).
+- Both `Undetermined` and `undetermined` filename prefixes are recognised (case-insensitive match on the first letter).
+- If no undetermined files are found, no undetermined rows are written — the script works correctly for runs without undetermined reads.
+- Lanes are detected dynamically; any number of lanes (L001–L008) are supported.
+
+
+## 2. run_seqinspector_FCQC.sh
 
 Wrapper script that generates a sample sheet from a flowcell directory and launches the seqinspector QC pipeline. Supports a `--dry-run` flag to generate the sample sheet and print the fully resolved Nextflow command without executing it.
 
