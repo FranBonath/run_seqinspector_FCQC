@@ -26,7 +26,6 @@ SAMPLESHEET_SCRIPT="[path to generate_seqinspector_samplesheet.sh]"
 
 DEFAULT_SAMPLESHEET_OUTDIR="[path to default seqinspector samplesheet outdir]"
 
-SEQINSPECTOR_PIPELINE_ORG= "path to parent dir of main.nf of nf-core/seqinspector"
 
 # ---------------------------------------------------------------------------
 # Argument parsing
@@ -82,7 +81,7 @@ fi
 source "$config_file"
 
 # Verify required config variables are set
-for var in NF_CONFIG SEQINSPECTOR_CONFIG OUTDIR FASTQ_SCREEN_REFERENCES; do
+for var in NF_CONFIG SEQINSPECTOR_CONFIG OUTDIR FASTQ_SCREEN_REFERENCES SEQINSPECTOR_PIPELINE_ORG; do
     if [[ -z "${!var:-}" ]]; then
         echo "Error: '$var' is not set in $config_file"
         exit 1
