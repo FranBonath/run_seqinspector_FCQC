@@ -2,6 +2,12 @@
 
 This repository consists of bash scripts and dummy config files that can be used at NGI Stockholm to create a samplesheet for the nf-core/seqinspector pipeline based on a Illumina flowcell run directory.
 
+Find the README for the individual scripts in this repo below:
+
+1. [generate_seqinspector_samplesheet.sh](#1-generate_seqinspector_samplesheetsh)
+2. [run_seqinspector_FCQC.sh](#2-run_seqinspector_fcqcsh)
+3. [create_qc_symlinks.sh](#3-create_qc_symlinkssh)
+
 ## 1. generate_seqinspector_samplesheet.sh
 
 ### Overview
@@ -237,3 +243,101 @@ ABCDEFGH_20240101_143022/             ← pipeline output directory
 - The script uses `set -euo pipefail` and will abort immediately on any error, unset variable, or failed pipe.
 - Progress messages with timestamps are printed to stdout at each stage.
 - `--dry-run` can be placed anywhere on the command line.
+
+
+## 3. create_qc_symlinks.sh
+
+Creates per-file symlinks of seqinspector QC results into the project analysis directories on the HPC, so that results are accessible for cross flowcell Multiqc reports from each project's dedicated analysis space without duplicating data.
+
+### How it works
+
+After a seqinspector run, this script reads the seqinspector samplesheet used in `run_seqinspector_FCQC.sh` to identify which projects were on the flowcell. The project ID (e.g. `P12345`) is extracted from the first `_`-delimited field of each sample name. The project name (the `tags` column in the samplesheet) is not used.
+
+For each project ID, the script mirrors the relevant result subdirectories under the project's analysis path and symlinks individual files whose filename contains `<project_id>_` (anywhere in the name). Undetermined reads are always ignored.
+
+The following seqinspector result subdirectories are processed (hard coded):
+- `fastqc`
+- `fastqscreen`
+
+This means the following seqinspector output directories are ignored:
+- `multiqc`
+- `pipeline_info`
+- `rundirparser`
+
+The resulting structure looks like:
+
+```
+<analysis_base>/
+└── P12345/
+    └── qc_ngi/
+        ├── fastqc/
+        │   ├── sample_P12345_lane1_fastqc.html -> /path/to/results/fastqc/sample_P12345_lane1_fastqc.html
+        │   └── sample_P12345_lane1_fastqc.zip  -> /path/to/results/fastqc/sample_P12345_lane1_fastqc.zip
+        └── fastqscreen/
+            └── sample_P12345_lane1_screen.txt  -> /path/to/results/fastqscreen/sample_P12345_lane1_screen.txt
+```
+
+### Usage
+
+```bash
+bash create_qc_symlinks.sh -b <analysis_base> -r <results_dir> [-s <samplesheet>] [-p <project_id> ...] [--dry-run]
+```
+
+Either `-s` or at least one `-p` must be provided (both can be used together).
+
+## Options
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `-b` | Yes | Base path for project analysis directories. Target path per project: `<analysis_base>/<project_id>/qc_ngi/<subdir>/`. |
+| `-r` | Yes | Path to the seqinspector results directory for this run. |
+| `-s` | Conditional | Path to the samplesheet CSV used for the run. Required if `-p` is not given. |
+| `-p` | Conditional | Project ID to include (e.g. `P12345`). Repeat for multiple. Required if `-s` is not given. If used with `-s`, the specified IDs are validated against the samplesheet. |
+| `--dry-run` | No | Print the actions that would be taken without creating any directories or symlinks. |
+
+### Examples
+
+**All projects on the flowcell (samplesheet required):**
+```bash
+bash create_qc_symlinks.sh \
+  -b /project/ngi12345/keinbackup/NGI/ANALYSIS \
+  -r /path/to/seqinspector/output/HXXX_20250130_143022 \
+  -s /path/to/samplesheets/HXXX_20250130_143022.csv
+```
+
+**Specific project(s), validated against the samplesheet:**
+```bash
+bash create_qc_symlinks.sh \
+  -b /project/ngi12345/keinbackup/NGI/ANALYSIS \
+  -r /path/to/seqinspector/output/HXXX_20250130_143022 \
+  -s /path/to/samplesheets/HXXX_20250130_143022.csv \
+  -p P12345 -p P67890
+```
+
+**Specific project(s) without a samplesheet:**
+```bash
+bash create_qc_symlinks.sh \
+  -b /project/ngi12345/keinbackup/NGI/ANALYSIS \
+  -r /path/to/seqinspector/output/HXXX_20250130_143022 \
+  -p P12345
+```
+
+**Dry run to check what would happen:**
+```bash
+bash create_qc_symlinks.sh \
+  -b /project/ngi12345/keinbackup/NGI/ANALYSIS \
+  -r /path/to/seqinspector/output/HXXX_20250130_143022 \
+  -s /path/to/samplesheets/HXXX_20250130_143022.csv \
+  --dry-run
+```
+
+### Notes
+
+- The **project ID** is the first `_`-delimited field of the sample name (e.g. `P12345` from `P12345_101_HXXX_lane1`).
+- Files are matched by the pattern `*<project_id>_*` — the project ID can appear anywhere in the filename and must be followed by an underscore.
+- If a symlink already exists at the target path, it is skipped with a message rather than overwritten.
+- If a path exists at the target location but is not a symlink (e.g. a real directory), it is skipped with a warning.
+- If a result subdirectory (`fastqc`, `fastqscreen`) is not present in the results directory, it is skipped with a message.
+- If no files matching `<project_id>_` are found in a subdirectory, a message is printed and no symlinks are created for that combination.
+- If a project ID given with `-p` is not found in the samplesheet (when `-s` is also provided), a warning is printed and it is skipped. If none of the requested IDs are found, the script exits with an error.
+- The samplesheet is expected to be in the CSV format produced by `generate_seqinspector_samplesheet.sh`, with columns: `sample, fastq_1, fastq_2, rundir, tags`.
