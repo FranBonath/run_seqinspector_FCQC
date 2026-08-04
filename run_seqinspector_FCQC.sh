@@ -11,7 +11,7 @@
 #   -c          Path to the seqinspector_FCQC.config file (required)
 #   -f          Path to the flowcell directory (required)
 #   -o          Directory where the generated sample sheet will be saved (optional)
-#               Default: /proj/ngi2016003/nobackup/fran/analysis/seqinspector/production_wf_test/seqinspector_samplesheets
+#               Default: [path to default seqinspector samplesheet outdir]
 #   --dry-run   Generate the sample sheet but print the Nextflow command instead of executing it
 
 set -euo pipefail
@@ -25,7 +25,6 @@ SAMPLESHEET_SCRIPT="[path to generate_seqinspector_samplesheet.sh]"
 [[ ! -f "$SAMPLESHEET_SCRIPT" ]] && { echo "Error: samplesheet script not found: $SAMPLESHEET_SCRIPT"; exit 1; }
 
 DEFAULT_SAMPLESHEET_OUTDIR="[path to default seqinspector samplesheet outdir]"
-
 
 # ---------------------------------------------------------------------------
 # Argument parsing
